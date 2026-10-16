@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Literature Review Matrix Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#f5f7fb;--card:#fff;--tx:#1f2937;--mu:#6b7280;--pr:#2563eb;--bd:#e5e7eb;--th:#eff6ff}
+@media(prefers-color-scheme:dark){:root{--bg:#0f172a;--card:#1e293b;--tx:#e5e7eb;--mu:#94a3b8;--pr:#60a5fa;--bd:#334155;--th:#26364f}}
+*{box-sizing:border-box}body{margin:0;font-family:'Sarabun',sans-serif;background:var(--bg);color:var(--tx);padding:16px}
+.wrap{max-width:1300px;margin:auto}h1{margin:0 0 4px}p.sub{color:var(--mu);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:16px}
+.drop{border:2px dashed var(--pr);border-radius:12px;padding:28px;text-align:center;cursor:pointer}
+.drop.over{background:var(--th)}
+select{font-family:inherit;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx)}
+button{font-family:inherit;font-size:15px;border:0;border-radius:8px;padding:9px 16px;cursor:pointer;background:var(--pr);color:#fff;font-weight:600}
+button.sec{background:transparent;color:var(--pr);border:1px solid var(--pr)}button.red{background:#dc2626}
+button:disabled{opacity:.45;cursor:not-allowed}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input[type=password],input[type=text]{font-family:inherit;padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);min-width:240px}
+ul.files{list-style:none;padding:0;margin:10px 0}ul.files li{display:flex;justify-content:space-between;padding:6px 10px;border-bottom:1px solid var(--bd);font-size:14px}
+ul.files li span.x{color:#dc2626;cursor:pointer}
+.bar{height:8px;background:var(--bd);border-radius:4px;overflow:hidden;margin-top:8px}.bar>div{height:100%;background:var(--pr);width:0;transition:.3s}
+.tw{overflow:auto;max-height:70vh}table{border-collapse:collapse;width:100%;font-size:13px;min-width:1500px}
+th,td{border:1px solid var(--bd);padding:6px 8px;vertical-align:top;text-align:left}th{background:var(--th);position:sticky;top:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:16px}
+.ch h3{margin:0 0 8px;font-size:16px}.ch canvas{max-height:340px}.hide{display:none}.note{font-size:13px;color:var(--mu)}
+#log{font-size:13px;color:var(--mu);margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>📚 วิเคราะห์การทบทวนวรรณกรรม (Literature Review Matrix)</h1>
+<p class="sub">อัปโหลดบทความวิจัย PDF (ไทย/อังกฤษ) ได้ไม่จำกัดจำนวน แล้วให้ AI สรุปเป็นตารางภาษาไทยพร้อมกราฟวิเคราะห์</p>
+
+<div class="card">
+  <div class="row" style="margin-bottom:10px">
+    <b>โหมดวิเคราะห์:</b>
+    <label><input type="radio" name="mode" value="offline" checked> ไม่ใช้คีย์ (สกัดข้อมูลด้วยกฎ ในเครื่อง)</label>
+    <label><input type="radio" name="mode" value="ai"> ใช้ AI (ใส่ API Key — มีตัวเลือกฟรี)</label>
+  </div>
+  <div id="offnote" class="note">โหมดไม่ใช้คีย์: ระบบดึงข้อความตามหัวข้อมาตรฐาน (วัตถุประสงค์/Objective, ผลการวิจัย/Results ฯลฯ) ไม่ได้แปลหรือสรุปใหม่ จึงควรตรวจแก้ในตารางก่อนใช้งาน และข้อมูลไม่ออกจากเครื่องคุณ</div>
+  <div class="row hide" id="keyrow">
+    <label><b>ผู้ให้บริการ:</b></label>
+    <select id="prov"><option value="gemini">Google Gemini (ฟรี)</option><option value="groq">Groq (ฟรี)</option><option value="openrouter">OpenRouter (โมเดลฟรี)</option><option value="mistral">Mistral (ฟรี)</option><option value="anthropic">Anthropic (เสียเงิน)</option></select>
+    <label><b>API Key:</b></label>
+    <input type="password" id="key" placeholder="sk-ant-...">
+    <label>โมเดล:</label><input type="text" id="model" value="gemini-3.8-flash" style="min-width:170px">
+  </div>
+  <p class="note hide" id="keynote"></p>
+  <div class="drop" id="drop">📄 ลากไฟล์ PDF มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์ (เลือกได้หลายไฟล์)
+    <input type="file" id="file" accept="application/pdf" multiple class="hide"></div>
+  <ul class="files" id="files"></ul>
+  <div class="row">
+    <button id="run" disabled>🔍 วิเคราะห์ข้อมูล</button>
+    <button id="word" class="sec" disabled>📝 ส่งออก Word</button>
+    <button id="excel" class="sec" disabled>📊 ส่งออก Excel</button>
+    <button id="reset" class="red">↺ Reset</button>
+  </div>
+  <div class="bar"><div id="prog"></div></div><div id="log"></div>
+</div>
+
+<div id="result" class="hide">
+  <div class="card"><h2 style="margin-top:0">ตาราง Literature Review Matrix</h2>
+    <div class="tw"><table id="tbl"></table></div></div>
+  <div class="grid" id="charts"></div>
+</div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const $=id=>document.getElementById(id);
+let files=[],rows=[],charts={};
+const COLS=[['no','ลำดับ'],['title','ชื่อเรื่อง'],['author','ผู้แต่ง'],['year','ปี'],['country','ประเทศ/ภาษา'],['objective','วัตถุประสงค์'],['design','รูปแบบการวิจัย'],['sample','กลุ่มตัวอย่าง/ข้อมูล'],['tools','เครื่องมือ/วิธีวิเคราะห์'],['findings','ผลการวิจัย'],['limits','ข้อจำกัด/ข้อเสนอแนะ'],['keywords','คำสำคัญ']];
+const CRIT_AI=['ความเกี่ยวข้อง','ความเข้มงวดเชิงวิธีวิจัย','ความใหม่','ความชัดเจน','การนำไปใช้'];
+const CRIT_OFF=['วัตถุประสงค์','กลุ่มตัวอย่าง','เครื่องมือ','ผลการวิจัย','ข้อจำกัด/ข้อเสนอแนะ'];
+let CRIT=CRIT_AI,radarTitle='กราฟเรดาร์: คะแนนเฉลี่ยคุณภาพบทความ (1-5) ประเมินโดย AI';
+const PROV={
+ gemini:{model:'gemini-3.8-flash',max:60000,url:'aistudio.google.com/apikey',note:'ฟรี ไม่ต้องใช้บัตรเครดิต แต่ Google อาจนำข้อมูลที่ส่งไปปรับปรุงโมเดลในระดับฟรี'},
+ groq:{model:'openai/gpt-oss-120b',max:12000,url:'console.groq.com/keys',note:'ฟรี เร็วมาก แต่จำกัดโทเคนต่อนาที ระบบจึงส่งข้อความไม่เกิน ~12,000 ตัวอักษรต่อบทความ'},
+ openrouter:{model:'openrouter/free',max:12000,url:'openrouter.ai/keys',note:'โมเดลฟรีจำกัดประมาณ 50 คำขอ/วัน (อาจเพิ่มได้ถ้าเติมเครดิต) ใส่ชื่อโมเดลที่ลงท้าย :free เองได้'},
+ mistral:{model:'mistral-small-latest',max:12000,url:'console.mistral.ai/api-keys',note:'แพ็กเกจฟรีมีเครดิตรายเดือนจำกัด และอาจใช้ข้อมูลเทรนถ้าไม่ปิดในการตั้งค่า'},
+ anthropic:{model:'claude-sonnet-5-5',max:40000,url:'console.anthropic.com',note:'เสียเงินตามการใช้งาน คุณภาพภาษาไทยดีที่สุด'}};
+function provUI(){const v=PROV[$('prov').value];$('model').value=v.model;
+  $('keynote').innerHTML=`รับคีย์ที่ <b>${v.url}</b> — ${v.note}<br>คีย์ใช้ในเบราว์เซอร์ของคุณเพื่อเรียก API โดยตรง ไม่ถูกบันทึกลงไฟล์ (ถ้าโดน CORS บล็อก ให้ลองผู้ให้บริการอื่น)`}
+const mode=()=>document.querySelector('input[name=mode]:checked').value;
+$('prov').onchange=provUI;provUI();
+document.querySelectorAll('input[name=mode]').forEach(r=>r.onchange=()=>{const a=mode()==='ai';
+  $('keyrow').classList.toggle('hide',!a);if(a)provUI();$('keynote').classList.toggle('hide',!a);$('offnote').classList.toggle('hide',a)});
+const esc=s=>String(s??'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const val=(r,k)=>Array.isArray(r[k])?r[k].join(', '):(r[k]??'');
+
+// ---- upload ----
+const addFiles=l=>{[...l].filter(f=>f.name.toLowerCase().endsWith('.pdf')).forEach(f=>files.push(f));renderFiles()};
+function renderFiles(){
+  $('files').innerHTML=files.map((f,i)=>`<li><span>📄 ${esc(f.name)} (${(f.size/1024).toFixed(0)} KB)</span><span class="x" onclick="files.splice(${i},1);renderFiles()">✕</span></li>`).join('');
+  $('run').disabled=!files.length;
+}
+$('drop').onclick=()=>$('file').click();
+$('file').onchange=e=>{addFiles(e.target.files);e.target.value=''};
+['dragover','dragenter'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();$('drop').classList.add('over')}));
+['dragleave','drop'].forEach(ev=>$('drop').addEventListener(ev,e=>{e.preventDefault();$('drop').classList.remove('over')}));
+$('drop').addEventListener('drop',e=>addFiles(e.dataTransfer.files));
+
+// ---- pdf text ----
+let lastMeta={};
+async function pdfText(f,max=40000){
+  const pdf=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;let t='';
+  try{lastMeta=(await pdf.getMetadata()).info||{}}catch(e){lastMeta={}}
+  for(let i=1;i<=pdf.numPages&&t.length<max;i++){
+    const p=await pdf.getPage(i),c=await p.getTextContent();t+=c.items.map(x=>x.str).join(' ')+'\n';
+  }
+  return t.slice(0,max);
+}
+
+// ---- AI analysis ----
+async function analyze(text,name){
+  const prompt=`คุณเป็นผู้ช่วยนักวิจัย วิเคราะห์บทความวิจัยต่อไปนี้ (อาจเป็นภาษาไทยหรืออังกฤษ) แล้วตอบเป็น JSON เท่านั้น ห้ามมีข้อความอื่นหรือ markdown โดยเนื้อหาทุกช่องเขียนเป็นภาษาไทย (ยกเว้นชื่อเรื่องและชื่อผู้แต่งให้คงภาษาเดิม) และกระชับ
+คีย์ที่ต้องมี: title, author (ผู้แต่งหลักและคณะ), year (ปี ค.ศ. เป็นตัวเลข ถ้าเป็น พ.ศ. ให้แปลงเป็น ค.ศ.), country (ประเทศ/ภาษา), objective, design (เลือก 1 ใน: เชิงปริมาณ, เชิงคุณภาพ, วิธีผสม, ทบทวนวรรณกรรม, เชิงทฤษฎี/แนวคิด, อื่นๆ), sample, tools, findings, limits, keywords (อาร์เรย์ 3-6 คำภาษาไทย), topic (หมวดหัวข้อหลัก 1 คำ/วลีสั้น), scores (อ็อบเจ็กต์คะแนน 1-5 ของ: ${CRIT.map(c=>`"${c}"`).join(', ')})
+ชื่อไฟล์: ${name}
+เนื้อหา:
+${text}`;
+  let pv=$('prov').value,key=$('key').value.trim(),model=$('model').value.trim();
+  let url,headers={'content-type':'application/json'},body,get;
+  if(pv==='gemini'){
+    url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`;
+    body={contents:[{parts:[{text:prompt}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:3000}};
+    get=d=>(d.candidates?.[0]?.content?.parts||[]).map(x=>x.text||'').join('');
+  }else if(pv==='anthropic'){
+    url='https://api.anthropic.com/v1/messages';
+    headers={...headers,'x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'};
+    body={model,max_tokens:2000,messages:[{role:'user',content:prompt}]};
+    get=d=>d.content.map(c=>c.text||'').join('');
+  }else{
+    url={groq:'https://api.groq.com/openai/v1/chat/completions',openrouter:'https://openrouter.ai/api/v1/chat/completions',mistral:'https://api.mistral.ai/v1/chat/completions'}[pv];
+    headers.authorization='Bearer '+key;
+    body={model,max_tokens:2500,messages:[{role:'user',content:prompt}]};
+    get=d=>d.choices?.[0]?.message?.content||'';
+  }
+  for(let k=0;;k++){
+    const r=await fetch(url,{method:'POST',headers,body:JSON.stringify(body)});
+    const d=await r.json().catch(()=>({}));
+    if(r.status===429&&k<3){$('log').textContent=`ติดลิมิตของบริการฟรี รอ 20 วินาทีแล้วลองใหม่ (${k+1}/3)…`;await new Promise(z=>setTimeout(z,20000));continue}
+    const msg=d.error?.message||'',sug=msg.match(/use models\/([\w.\-]+)/i);
+    if(!r.ok&&pv==='gemini'&&sug&&sug[1]!==model&&k<3){model=sug[1];$('model').value=model;url=url.replace(/models\/[^:]+:/,'models/'+encodeURIComponent(model)+':');continue}
+    if(!r.ok)throw new Error(d.error?.message||d[0]?.error?.message||r.status);
+    const txt=get(d),m=txt.match(/\{[\s\S]*\}/);if(!m)throw new Error('AI ตอบกลับในรูปแบบที่อ่านไม่ได้');return JSON.parse(m[0]);
+  }
+}
+
+
+// ---- offline (rule-based) extraction ----
+const cut=(s,n)=>{s=s.trim();if(s.length<=n)return s;const c=s.slice(0,n),i=Math.max(c.lastIndexOf('. '),c.lastIndexOf(' '));return c.slice(0,i>n*.5?i:n)+'…'};
+function sec(t,re,n=380,last=false){
+  const g=new RegExp(re.source,'gi');let m,pos=-1;
+  while((m=g.exec(t))){pos=m.index+m[0].length;if(!last)break}
+  if(pos<0)return '';return cut(t.slice(pos).replace(/^[\s:：\-–.]+/,''),n);
+}
+const cn=(t,re)=>(t.match(new RegExp(re.source,'gi'))||[]).length;
+function offline(raw,name){
+  const t=raw.replace(/\s+/g,' ');const head=t.slice(0,4000);
+  const th=(t.match(/[\u0E00-\u0E7F]/g)||[]).length/Math.max(t.length,1);
+  const yc={};(head.match(/\b(19[89]\d|20[0-2]\d|25[2-6]\d)\b/g)||[]).forEach(y=>{y=+y;if(y>2400)y-=543;if(y<=2026)yc[y]=(yc[y]||0)+1});
+  const year=+(Object.entries(yc).sort((a,b)=>b[1]-a[1]||b[0]-a[0])[0]||[''])[0]||'';
+  const q=cn(t,/แบบสอบถาม|questionnaire|survey|สมมติฐาน|regression|t-test|anova|correlation|ค่าเฉลี่ย|ส่วนเบี่ยงเบนมาตรฐาน|statistical/),
+        l=cn(t,/สัมภาษณ์|interview|focus group|สนทนากลุ่ม|ethnograph|phenomenolog|เชิงคุณภาพ|qualitative|thematic/),
+        r=cn(t,/systematic review|literature review|meta-analysis|scoping review|ทบทวนวรรณกรรมอย่างเป็นระบบ|การทบทวนวรรณกรรม/);
+  let design='อื่นๆ';
+  if(cn(t,/mixed[- ]method|วิธีผสม|ผสมผสานวิธี/)||(q>=5&&l>=5))design='วิธีผสม';
+  else if(r>=3&&r>q&&r>l)design='ทบทวนวรรณกรรม';
+  else if(q>=3&&q>=l)design='เชิงปริมาณ';else if(l>=3)design='เชิงคุณภาพ';
+  let kw=[];const km=t.match(/(?:keywords?|key words|คำสำคัญ)\s*[:：]?\s*(.{5,160}?)(?:\s{2,}|\.\s|introduction|บทนำ|1\.|$)/i);
+  if(km)kw=km[1].split(/[,;،、·•]/).map(x=>x.trim()).filter(x=>x&&x.length<40).slice(0,6);
+  const o={title:(lastMeta.Title||'').trim()||name.replace(/\.pdf$/i,''),author:(lastMeta.Author||'').trim()||'-',year,
+   country:th>.15?'ภาษาไทย':'ภาษาอังกฤษ',
+   objective:sec(t,/(?:วัตถุประสงค์(?:ของ)?(?:การ)?(?:วิจัย|ศึกษา)?|objectives?|aims?|purpose of (?:this|the) (?:study|research|paper))/),
+   design,
+   sample:sec(t,/(?:ประชากรและกลุ่มตัวอย่าง|กลุ่มตัวอย่าง|participants|sample|respondents|population)/,300),
+   tools:sec(t,/(?:เครื่องมือที่ใช้ใน(?:การ)?วิจัย|เครื่องมือ(?:ที่ใช้)?|การวิเคราะห์ข้อมูล|instruments?|data analysis|measures)/,300),
+   findings:sec(t,/(?:ผลการวิจัย|ผลการศึกษา|สรุปผล|results?|findings)/,450),
+   limits:sec(t,/(?:ข้อจำกัด|ข้อเสนอแนะ|limitations?|recommendations?|future (?:research|work|studies))/,350,true),
+   keywords:kw,topic:kw[0]||'ไม่ระบุ'};
+  const ok=k=>o[k]?5:0;
+  o.scores={'วัตถุประสงค์':ok('objective'),'กลุ่มตัวอย่าง':ok('sample'),'เครื่องมือ':ok('tools'),'ผลการวิจัย':ok('findings'),'ข้อจำกัด/ข้อเสนอแนะ':ok('limits')};
+  return o;
+}
+$('run').onclick=async()=>{
+  const ai=mode()==='ai';
+  if(ai&&!$('key').value.trim())return alert('กรุณาใส่ API Key');
+  CRIT=ai?CRIT_AI:CRIT_OFF;
+  radarTitle=ai?'กราฟเรดาร์: คะแนนเฉลี่ยคุณภาพบทความ (1-5) ประเมินโดย AI':'กราฟเรดาร์: ความครบถ้วนของข้อมูลที่สกัดได้ (5 = พบหัวข้อ, 0 = ไม่พบ)';
+  $('run').disabled=true;rows=[];$('prog').style.width='0';
+  for(let i=0;i<files.length;i++){
+    $('log').textContent=`กำลังวิเคราะห์ (${i+1}/${files.length}): ${files[i].name}`;
+    try{
+      const t=await pdfText(files[i],ai?PROV[$('prov').value].max:300000);if(t.trim().length<50)throw new Error('อ่านข้อความจาก PDF ไม่ได้ (อาจเป็นไฟล์สแกน)');
+      const r=ai?await analyze(t,files[i].name):offline(t,files[i].name);r.no=rows.length+1;rows.push(r);
+    }catch(e){rows.push({no:rows.length+1,title:files[i].name,findings:'⚠ วิเคราะห์ไม่สำเร็จ: '+e.message,keywords:[],scores:{}})}
+    $('prog').style.width=((i+1)/files.length*100)+'%';
+    if(ai&&$('prov').value!=='anthropic'&&i<files.length-1)await new Promise(z=>setTimeout(z,4000));
+  }
+  $('log').textContent=`เสร็จสิ้น ${rows.length} บทความ`;
+  $('run').disabled=false;$('word').disabled=$('excel').disabled=false;render();
+};
+
+// ---- render ----
+function render(){
+  $('result').classList.remove('hide');
+  $('tbl').innerHTML='<tr>'+COLS.map(c=>`<th>${c[1]}</th>`).join('')+'</tr>'+rows.map(r=>'<tr>'+COLS.map(c=>`<td>${esc(val(r,c[0]))}</td>`).join('')+'</tr>').join('');
+  Object.values(charts).forEach(c=>c.destroy());charts={};
+  const cnt=(arr)=>{const o={};arr.filter(Boolean).forEach(k=>o[k]=(o[k]||0)+1);return o};
+  const years=cnt(rows.map(r=>r.year));const ys=Object.keys(years).sort();
+  const design=cnt(rows.map(r=>r.design));
+  const kw=Object.entries(cnt(rows.flatMap(r=>Array.isArray(r.keywords)?r.keywords:[]))).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const topic=cnt(rows.map(r=>r.topic));
+  const pal=['#2563eb','#16a34a','#f59e0b','#dc2626','#9333ea','#0891b2','#db2777','#65a30d','#ea580c','#475569'];
+  let cum=0;
+  const avg=CRIT.map(c=>{const v=rows.map(r=>+r.scores?.[c]).filter(x=>x);return v.length?+(v.reduce((a,b)=>a+b,0)/v.length).toFixed(2):0});
+  const defs=[
+   ['bar','กราฟแท่ง: จำนวนบทความแยกตามปี',{labels:ys,datasets:[{label:'จำนวนบทความ',data:ys.map(y=>years[y]),backgroundColor:pal[0]}]}],
+   ['pie','กราฟวงกลม: สัดส่วนรูปแบบการวิจัย',{labels:Object.keys(design),datasets:[{data:Object.values(design),backgroundColor:pal}]}],
+   ['radar',radarTitle,{labels:CRIT,datasets:[{label:'ค่าเฉลี่ยทั้งหมด',data:avg,backgroundColor:'rgba(37,99,235,.25)',borderColor:pal[0]}]}],
+   ['line','กราฟเส้น: จำนวนบทความสะสมตามปี',{labels:ys,datasets:[{label:'สะสม',data:ys.map(y=>cum+=years[y]),borderColor:pal[1],backgroundColor:pal[1],tension:.3,fill:false}]}],
+   ['bar','กราฟแท่งแนวนอน: คำสำคัญที่พบบ่อย',{labels:kw.map(k=>k[0]),datasets:[{label:'ความถี่',data:kw.map(k=>k[1]),backgroundColor:pal[2]}]},{indexAxis:'y'}],
+   ['doughnut','กราฟโดนัท: หมวดหัวข้อหลัก',{labels:Object.keys(topic),datasets:[{data:Object.values(topic),backgroundColor:pal}]}]
+  ];
+  $('charts').innerHTML=defs.map((d,i)=>`<div class="card ch"><div class="row" style="justify-content:space-between"><h3>${d[1]}</h3><button class="sec" onclick="dlPng(${i})">⬇ PNG</button></div><canvas id="c${i}"></canvas></div>`).join('');
+  const white={id:'w',beforeDraw(c){const x=c.ctx;x.save();x.globalCompositeOperation='destination-over';x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.restore()}};
+  Chart.defaults.font.family="'Sarabun',sans-serif";Chart.defaults.color='#374151';
+  defs.forEach((d,i)=>{
+    const o={responsive:true,plugins:{title:{display:true,text:d[1]}},...(d[3]||{})};
+    if(d[0]==='radar')o.scales={r:{min:0,max:5}};
+    charts[i]=new Chart($('c'+i),{type:d[0],data:d[2],options:o,plugins:[white]});
+  });
+}
+window.dlPng=i=>{const a=document.createElement('a');a.href=charts[i].toBase64Image('image/png',1);a.download=`chart-${i+1}.png`;a.click()};
+
+// ---- export ----
+function save(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+$('excel').onclick=()=>{
+  const aoa=[COLS.map(c=>c[1]),...rows.map(r=>COLS.map(c=>val(r,c[0])))];
+  const ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=COLS.map((c,i)=>({wch:[6,40,25,8,14,40,16,30,30,50,40,25][i]}));
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Literature Matrix');
+  XLSX.writeFile(wb,'literature-review-matrix.xlsx');
+};
+$('word').onclick=()=>{
+  const imgs=Object.keys(charts).map(i=>`<p><img src="${charts[i].toBase64Image('image/png',1)}" width="520"></p>`).join('');
+  const html=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8"><style>@page{size:29.7cm 21cm;mso-page-orientation:landscape;margin:1.5cm}body{font-family:'TH Sarabun New',Sarabun,sans-serif;font-size:14pt}table{border-collapse:collapse;width:100%}th,td{border:1px solid #444;padding:4px;font-size:11pt;vertical-align:top}th{background:#dbeafe}</style></head><body><h2>ตาราง Literature Review Matrix</h2><table><tr>${COLS.map(c=>`<th>${c[1]}</th>`).join('')}</tr>${rows.map(r=>'<tr>'+COLS.map(c=>`<td>${esc(val(r,c[0]))}</td>`).join('')+'</tr>').join('')}</table><h2>กราฟวิเคราะห์</h2>${imgs}</body></html>`;
+  save(new Blob(['\ufeff',html],{type:'application/msword'}),'literature-review-matrix.doc');
+};
+
+// ---- reset ----
+$('reset').onclick=()=>{
+  if(files.length||rows.length){if(!confirm('ต้องการล้างข้อมูลทั้งหมดและเริ่มใหม่หรือไม่?'))return}
+  Object.values(charts).forEach(c=>c.destroy());charts={};files=[];rows=[];renderFiles();
+  $('result').classList.add('hide');$('tbl').innerHTML='';$('charts').innerHTML='';
+  $('prog').style.width='0';$('log').textContent='';$('word').disabled=$('excel').disabled=true;
+};
+</script>
+</body>
+</html>
